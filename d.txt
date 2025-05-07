@@ -1,0 +1,453 @@
+## Assignment 1 (a1)
+
+!pip install numpy tensorflow tqdm scikit-learn pandas matplotlib
+
+import tensorflow as tf
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn import metrics
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+%matplotlib inline
+from tqdm.notebook import tqdm
+import warnings
+warnings.filterwarnings("ignore")
+
+df = pd.read_csv('HousingData.csv')
+
+missing_values=df.isnull().sum()
+print("Missing values per columns:\n",missing_values)
+
+df.fillna(df.mean(), inplace=True)
+new_missing_values=df.isnull().sum()
+print("Missing values per columns:\n",new_missing_values)
+
+correlation_matrix = df.corr()
+plt.figure(figsize=(12, 8))
+sns.heatmap(correlation_matrix, annot=True, fmt=".2f", cmap="coolwarm",cbar=True)
+plt.title("Correlation Matrix")
+plt.show()
+
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+
+selected_features = ["RM", "LSTAT", "PTRATIO"]
+X = df[selected_features]
+y = df["MEDV"]
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2,random_state=42)
+model = LinearRegression()
+model.fit(X_train, y_train)
+y_pred = model.predict(X_test)
+
+mae = mean_absolute_error(y_test, y_pred)
+mse = mean_squared_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+
+coef_rm, coef_lstat, coef_ptratio = model.coef_
+intercept = model.intercept_
+mean_LSTAT = X_test["LSTAT"].mean()
+mean_PTRATIO = X_test["PTRATIO"].mean()
+
+rm_values = np.linspace(X_test["RM"].min(), X_test["RM"].max(), 100)
+X_line = np.column_stack((rm_values, np.full_like(rm_values, mean_LSTAT), np.full_like(rm_values, mean_PTRATIO)))
+predicted_medv = model.predict(X_line)
+plt.figure(figsize=(10, 6))
+plt.scatter(X_test["RM"], y_test, color="blue", label="Actual Values")
+plt.plot(rm_values, predicted_medv, color="green", label="Regression Line␣, (Predicted MEDV)", linewidth=2)
+plt.xlabel("Average number of rooms per dwelling (RM)")
+plt.ylabel("Median value of owner-occupied homes (MEDV)")
+plt.title("Regression Line: RM vs MEDV (Predicted)")
+plt.legend()
+plt.show()
+
+from sklearn.model_selection import train_test_split
+X = df.drop(columns='MEDV')
+y = df['MEDV']
+x_train, x_test, y_train, y_test = train_test_split(X, y, test_size=0.2,random_state=42)
+print("Training set shape:", X_train.shape)
+print("Test set shape:", X_test.shape)
+
+scaler = StandardScaler()
+
+x_train_scaled = scaler.fit_transform(x_train)
+x_test_scaled = scaler.transform(x_test)
+y_train_scaled = scaler.fit_transform(y_train.to_numpy().reshape(-1, 1))
+y_test_scaled = scaler.transform(y_test.to_numpy().reshape(-1, 1))
+
+model = tf.keras.models.Sequential([
+tf.keras.layers.Input(shape=(14, ), name='input-layer'),
+tf.keras.layers.Dense(100, name='hidden-layer-2'),
+tf.keras.layers.BatchNormalization(name='hidden-layer-3'),
+tf.keras.layers.Dense(50, name='hidden-layer-4'),
+tf.keras.layers.Dense(1, name='output-layer')
+])
+model.compile(optimizer='adam', loss='mse', metrics=['mae', 'accuracy'])
+model.summary()
+
+tf.keras.utils.plot_model(model, show_shapes=True)
+
+__________________________________________________________
+
+
+## Assignment 2.1 (With Embedding) (a2)
+
+import tensorflow as tf
+import tensorflow_hub as hub
+import tensorflow_datasets as tfds
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from mlxtend.plotting import plot_confusion_matrix
+from sklearn import metrics
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+%matplotlib inline
+from tqdm.notebook import tqdm
+import warnings
+warnings.filterwarnings("ignore")
+
+train_data, validation_data, test_data = tfds.load(
+    name="imdb_reviews",
+    split=('train[:60%]', 'train[60%:]', 'test'),
+    as_supervised=True)
+
+train_examples_batch, train_labels_batch = next(iter(train_data.batch(10)))
+
+embedding = "https://tfhub.dev/google/nnlm-en-dim128-with-normalization/2"
+hub_layer = hub.KerasLayer(embedding, input_shape=[],
+                           dtype=tf.string, trainable=True)
+
+model = tf.keras.Sequential([
+    hub_layer,
+    tf.keras.layers.Dense(32, activation='relu', name='hidden-layer-2'),
+    tf.keras.layers.Dense(16, activation='relu', name='hidden-layer-3'),
+    tf.keras.layers.Dense(1, name='output-layer')
+])
+
+tf.keras.utils.plot_model(model, show_shapes=True)
+
+model.compile(optimizer='adam',
+              loss='binary_crossentropy',
+              metrics=['accuracy'])
+
+history = model.fit(train_data.shuffle(10000).batch(512),
+                    epochs=5,
+                    validation_data=validation_data.batch(512),
+                    verbose=1)
+
+
+results = model.evaluate(test_data.batch(512), verbose=2)
+
+for name, value in zip(model.metrics_names, results):
+  print("%s: %.3f" % (name, value))
+
+pd.DataFrame(history.history).plot(figsize=(10,7))
+plt.title("Metrics Graph")
+plt.show()
+
+texts = []
+true_labels = []
+for text, label in test_data:
+    texts.append(text.numpy())
+    true_labels.append(label.numpy())
+texts = np.array(texts)
+true_labels = np.array(true_labels)
+
+predicted_probs = model.predict(texts)
+
+predicted_labels = (predicted_probs > 0.5).astype(int)
+
+report = metrics.classification_report(true_labels, predicted_labels, target_names=['Negative', 'Positive'])
+print(report)
+
+cm = metrics.confusion_matrix(true_labels, predicted_labels)
+plot_confusion_matrix(cm, class_names=['Negative', 'Positive'])
+plt.title("Confusion Matrix")
+plt.show()
+
+__________________________________________________________
+
+## Assignment 2.2 (without embeddings) (a2)
+
+import tensorflow as tf
+from mlxtend.plotting import plot_confusion_matrix
+from sklearn import metrics
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+%matplotlib inline
+from tqdm.notebook import tqdm
+import warnings
+warnings.filterwarnings("ignore")
+
+vocab_size = 10000
+max_len = 200
+(x_train, y_train), (x_test, y_test) = tf.keras.datasets.imdb.load_data(num_words=vocab_size)
+
+x_train = tf.keras.preprocessing.sequence.pad_sequences(x_train, maxlen=max_len)
+x_test = tf.keras.preprocessing.sequence.pad_sequences(x_test, maxlen=max_len)
+
+model = tf.keras.Sequential([
+    tf.keras.layers.Embedding(vocab_size, 128, input_length=max_len),
+    tf.keras.layers.Flatten(),
+    tf.keras.layers.Dense(128, activation='relu'),
+    tf.keras.layers.Dense(1, activation='sigmoid')
+])
+
+tf.keras.utils.plot_model(model, show_shapes=True)
+
+model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+history = model.fit(x_train, y_train, batch_size=128, epochs=5, validation_data=(x_test, y_test))
+
+pd.DataFrame(history.history).plot(figsize=(10,7))
+plt.title("Model Metrics")
+plt.show()
+
+loss, accuracy = model.evaluate(x_test, y_test)
+print("Test Accuracy:", accuracy)
+
+y_pred = model.predict(x_test)
+
+y_pred = y_pred.flatten()
+
+y_pred = (y_pred > 0.5).astype(int)
+
+print(metrics.classification_report(y_test, y_pred))
+
+cm = metrics.confusion_matrix(y_test, y_pred)
+plot_confusion_matrix(cm, class_names=['Negative', 'Positive'])
+plt.title("Confusion Matrix")
+plt.show()
+
+__________________________________________________________
+
+## Assignment 3 (a3)
+
+import tensorflow as tf
+from sklearn.model_selection import train_test_split
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import confusion_matrix
+from tensorflow.keras.utils import to_categorical
+from sklearn import metrics
+from sklearn.metrics import confusion_matrix
+import random
+from tensorflow.keras.layers import BatchNormalization
+
+(trainX, trainY), (testX, testY) = tf.keras.datasets.fashion_mnist.load_data()
+# Reshape the input data to (samples, height, width, channels)
+trainX = trainX.reshape((trainX.shape[0], 28, 28, 1))
+testX = testX.reshape((testX.shape[0], 28, 28, 1))
+# Normalize the pixel values to range [0, 1]
+trainX, testX = trainX / 255.0, testX / 255.0
+# One-hot encode the labels
+trainY_cat = tf.keras.utils.to_categorical(trainY)
+testY_cat = tf.keras.utils.to_categorical(testY)
+# Print the shapes to verify
+print(trainX.shape, trainY_cat.shape)
+
+class_names = ['T-shirt/top', 'Trouser', 'Pullover', 'Dress', 'Coat',
+'Sandal', 'Shirt', 'Sneaker', 'Bag', 'Ankle boot']
+
+plt.figure(figsize=(10,10))
+for i in range(25):
+  plt.subplot(5,5,i+1)
+  plt.xticks([])
+  plt.yticks([])
+  plt.grid(False)
+  plt.imshow(trainX[i], cmap=plt.cm.binary)
+  plt.xlabel(class_names[trainY[i]])
+plt.show()
+
+model = tf.keras.models.Sequential([
+  tf.keras.layers.Conv2D(64, kernel_size=(3, 3), input_shape=(28, 28, 1),activation='relu', padding='same', name='conv-layer-1'),
+  BatchNormalization(),
+  tf.keras.layers.AvgPool2D(pool_size=(2, 2), name='pooling-layer-1'),
+  tf.keras.layers.Conv2D(128, kernel_size=(3, 3), activation='relu',padding='same', name='conv-layer-2'),
+  BatchNormalization(),
+  tf.keras.layers.AvgPool2D(pool_size=(2, 2), name='pooling-layer-2'),
+  tf.keras.layers.GlobalAveragePooling2D(name='pooling-layer-3'),
+  tf.keras.layers.Dense(128, activation='relu', name="dense-layer-1"),
+  tf.keras.layers.Dense(len(class_names), activation="softmax",name="output-layer")
+])
+# Compile the model with an appropriate optimizer, loss function, and metric
+model.compile(optimizer='adam', loss='categorical_crossentropy',metrics=['accuracy'])
+# Summarize the model
+model.summary()
+
+history = model.fit(trainX, trainY_cat, epochs=10, validation_data=(testX,testY_cat))
+
+pd.DataFrame(history.history).plot(figsize=(10,7))
+plt.title("Metrics Graph")
+plt.show()
+
+model.evaluate(testX, testY_cat)
+
+predictions = model.predict(testX)
+
+predictions = tf.argmax(predictions, axis=1)
+
+y_test = tf.argmax(testY_cat, axis=1)
+y_test = tf.Variable(y_test)
+
+print(metrics.classification_report(y_test, predictions))
+
+from sklearn.metrics import confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
+# Assuming y_test and predictions are defined
+cm = confusion_matrix(y_test, predictions)
+# Plot the confusion matrix using seaborn heatmap
+plt.figure(figsize=(10, 7))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=class_names,yticklabels=class_names)
+plt.xlabel('Predicted')
+plt.ylabel('True')
+plt.title('Confusion Matrix')
+plt.show()
+
+images = []
+labels = []
+random_indices = random.sample(range(len(testX)), 10)
+for idx in random_indices:
+  images.append(testX[idx])
+  labels.append(testY_cat[idx])
+images = np.array(images)
+labels = np.array(labels)
+fig = plt.figure(figsize=(20, 8))
+rows = 2
+cols = 5
+x = 1
+for image, label in zip(images, labels):
+  fig.add_subplot(rows, cols, x)
+  prediction = model.predict(tf.expand_dims(image, axis=0))
+  prediction = class_names[tf.argmax(prediction.flatten())]
+  label = class_names[tf.argmax(label)]
+  plt.title(f"Label: {label}, Prediction: {prediction}")
+  plt.imshow(image/255.)
+  plt.axis("off")
+  x += 1
+
+
+__________________________________________________________
+
+
+## Assignment 4 (a4)
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+import warnings
+import datetime
+import seaborn as sns
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.decomposition import PCA
+from sklearn.model_selection import train_test_split
+from tensorflow.keras import Sequential
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import LSTM
+from sklearn.metrics import r2_score
+
+data = pd.read_csv('Google_Stock_Price_Train.csv',thousands=',')
+data
+
+ax1 = data.plot(x="Date", y=["Open", "High", "Low", "Close"], figsize=(10,7),title='Open, High, Low, Close Stock Prices of Google Stocks')
+ax1.set_ylabel("Stock Price")
+
+ax2 = data.plot(x="Date", y=["Volume"],  figsize=(10,7))
+ax2.set_ylabel("Stock Volume")
+
+data[['Open','High','Low','Close','Volume']].plot(kind='box', layout=(1,5), subplots=True, sharex=False, sharey=False, figsize=(10,7),color='red')
+plt.show()
+
+data.hist(figsize=(10,7))
+plt.show()
+
+scaler = MinMaxScaler()
+data_without_date = data.drop("Date", axis=1)
+scaled_data = pd.DataFrame(scaler.fit_transform(data_without_date))
+
+scaled_data.hist(figsize=(10,7))
+plt.show()
+
+plt.figure(figsize=(10,7))
+sns.heatmap(data.drop("Date", axis=1).corr())
+plt.show()
+
+scaled_data = scaled_data.drop([0, 2, 3], axis=1)
+scaled_data
+
+def split_seq_multivariate(sequence, n_past, n_future):
+
+    '''
+    n_past ==> no of past observations
+    n_future ==> no of future observations
+    '''
+    x = []
+    y = []
+    for window_start in range(len(sequence)):
+        past_end = window_start + n_past
+        future_end = past_end + n_future
+        if future_end > len(sequence):
+            break
+        # slicing the past and future parts of the window (this indexing is for 2 features vala data only)
+        past = sequence[window_start:past_end, :]
+        future = sequence[past_end:future_end, -1]
+        x.append(past)
+        y.append(future)
+
+    return np.array(x), np.array(y)
+
+n_steps = 60
+
+scaled_data = scaled_data.to_numpy()
+scaled_data.shape
+
+x, y = split_seq_multivariate(scaled_data, n_steps, 1)
+
+y = y[:, 0]
+y.shape
+
+x_train, x_test, y_train, y_test = train_test_split(x, y,test_size=0.2, random_state=42)
+
+x_train.shape, x_test.shape, y_train.shape, y_test.shape
+
+model = Sequential()
+model.add(LSTM(612, input_shape=(n_steps, 2)))
+model.add(Dense(50, activation='relu'))
+model.add(Dense(50, activation='relu'))
+model.add(Dense(30, activation='relu'))
+model.add(Dense(1))
+
+model.compile(optimizer='adam', loss='mse', metrics=['mae'])
+
+history = model.fit(x_train, y_train, epochs=250, batch_size=32, verbose=2, validation_data=(x_test, y_test))
+
+pd.DataFrame(history.history).plot(figsize=(10,7))
+
+model.evaluate(x_test, y_test)
+
+predictions = model.predict(x_test)
+predictions.shape
+
+plt.plot(y_test, c = 'r')
+plt.plot(predictions, c = 'y')
+plt.xlabel('Day')
+plt.ylabel('Stock Price Volume')
+plt.title('Stock Price Volume Prediction Graph using RNN (LSTM)')
+plt.legend(['Actual','Predicted'], loc = 'lower right')
+plt.figure(figsize=(10,7))
+plt.show()
+
+
+
+
