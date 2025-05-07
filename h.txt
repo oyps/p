@@ -1,0 +1,792 @@
+﻿A1
+
+
+#include <iostream>
+#include <vector>
+#include <queue>
+#include <stack>
+#include <chrono>
+#include <omp.h>
+
+
+using namespace std;
+using namespace std::chrono;
+
+
+class Graph
+{
+public:
+    vector<vector<int>> adj;
+    vector<int> visited;
+    int n;
+
+
+    Graph(int vertices);
+    void accept();
+    void display();
+    void reset();
+    void normalDFS(int v);
+    void parallelDFS(int v);
+    void normalBFS(int v);
+    void parallelBFS(int v);
+};
+
+
+Graph::Graph(int vertices)
+{
+    n = vertices;
+    adj.resize(n, vector<int>(n, 0));
+    visited.resize(n, 0);
+}
+
+
+void Graph::accept()
+{
+    for (int i = 0; i < n; i++)
+    {
+        for (int j = 0; j < n; j++)
+        {
+            cin >> adj[i][j];
+        }
+    }
+}
+
+
+void Graph::display()
+{
+    for (int i = 0; i < n; i++)
+    {
+        for (int j = 0; j < n; j++)
+        {
+            cout << adj[i][j] << " ";
+        }
+        cout << endl;
+    }
+}
+
+
+void Graph::reset()
+{
+    fill(visited.begin(), visited.end(), 0);
+}
+
+
+void Graph::normalDFS(int v)
+{
+    visited[v] = 1;
+    cout << v << " ";
+    for (int i = 0; i < n; i++)
+    {
+        if (adj[v][i] == 1 && !visited[i])
+        {
+            normalDFS(i);
+        }
+    }
+}
+
+
+void Graph::parallelDFS(int v)
+{
+    stack<int> s;
+    s.push(v);
+
+
+#pragma omp parallel shared(s, visited)
+    {
+        while (!s.empty())
+        {
+            int node;
+#pragma omp critical
+            {
+                if (!s.empty())
+                {
+                    node = s.top();
+                    s.pop();
+                }
+            }
+
+
+            if (!visited[node])
+            {
+                visited[node] = 1;
+                cout << node << " ";
+            }
+
+
+#pragma omp parallel for
+            for (int i = 0; i < n; i++)
+            {
+                if (adj[node][i] == 1 && !visited[i])
+                {
+#pragma omp critical
+                    s.push(i);
+                }
+            }
+        }
+    }
+}
+
+
+void Graph::normalBFS(int v)
+{
+    queue<int> q;
+    q.push(v);
+    visited[v] = 1;
+
+
+    while (!q.empty())
+    {
+        int node = q.front();
+        q.pop();
+        cout << node << " ";
+
+
+        for (int i = 0; i < n; i++)
+        {
+            if (adj[node][i] == 1 && !visited[i])
+            {
+                visited[i] = 1;
+                q.push(i);
+            }
+        }
+    }
+}
+
+
+void Graph::parallelBFS(int v)
+{
+    queue<int> q;
+    q.push(v);
+    visited[v] = 1;
+
+
+#pragma omp parallel shared(q, visited)
+    {
+        while (!q.empty())
+        {
+            int node;
+#pragma omp critical
+            {
+                if (!q.empty())
+                {
+                    node = q.front();
+                    q.pop();
+                }
+            }
+
+
+            if (!visited[node])
+            {
+                visited[node] = 1;
+                cout << node << " ";
+            }
+
+
+#pragma omp parallel for
+            for (int i = 0; i < n; i++)
+            {
+                if (adj[node][i] == 1 && !visited[i])
+                {
+#pragma omp critical
+                    q.push(i);
+                }
+            }
+        }
+    }
+}
+
+
+int main()
+{
+    int choice, vertices, start;
+    cout << "Enter number of vertices: ";
+    cin >> vertices;
+
+
+    Graph g(vertices);
+
+
+    while (true)
+    {
+        cout << "\nMenu:\n";
+        cout << "1: Accept & Display\n";
+        cout << "2: DFS Comparison\n";
+        cout << "3: BFS Comparison\n";
+        cout << "Enter your choice: ";
+        cin >> choice;
+
+
+        switch (choice)
+        {
+        case 1:
+            g.accept();
+            g.display();
+            break;
+
+
+        case 2:
+            cout << "Enter starting node for DFS: ";
+            cin >> start;
+
+
+            g.reset();
+            auto start_time = high_resolution_clock::now();
+            g.normalDFS(start);
+            auto end_time = high_resolution_clock::now();
+            cout << "\nTime taken for Normal DFS: " << duration_cast<microseconds>(end_time - start_time).count() << " microseconds\n";
+
+
+            g.reset();
+            cout << "\nParallel DFS: ";
+            start_time = high_resolution_clock::now();
+            g.parallelDFS(start);
+            end_time = high_resolution_clock::now();
+            cout << "\nTime taken for Parallel DFS: " << duration_cast<microseconds>(end_time - start_time).count() << " microseconds\n";
+            break;
+
+
+        case 3:
+            cout << "Enter starting node for BFS: ";
+            cin >> start;
+
+
+            g.reset();
+            auto start_time_bfs = high_resolution_clock::now();
+            g.normalBFS(start);
+            auto end_time_bfs = high_resolution_clock::now();
+            cout << "\nTime taken for Normal BFS: " << duration_cast<microseconds>(end_time_bfs - start_time_bfs).count() << " microseconds\n";
+
+
+            g.reset();
+            cout << "\nParallel BFS: ";
+            start_time_bfs = high_resolution_clock::now();
+            g.parallelBFS(start);
+            end_time_bfs = high_resolution_clock::now();
+            cout << "\nTime taken for Parallel BFS: " << duration_cast<microseconds>(end_time_bfs - start_time_bfs).count() << " microseconds\n";
+            break;
+
+
+        default:
+            cout << "Invalid choice!\n";
+        }
+    }
+
+
+    return 0;
+}
+
+________________
+A2.
+
+#include <iostream>
+#include <vector>
+#include <chrono>
+#include <omp.h>
+
+
+using namespace std;
+using namespace std::chrono;
+
+
+class Sort
+{
+public:
+    vector<int> arr;
+    int n;
+
+
+    Sort(int size);
+    void accept();
+    void display();
+    void reset(vector<int> &original);
+    void normalBubbleSort();
+    void parallelBubbleSort();
+    void normalMergeSort(int left, int right);
+    void parallelMergeSort(int left, int right);
+};
+
+
+Sort::Sort(int size)
+{
+    n = size;
+    arr.resize(n);
+}
+
+
+void Sort::accept()
+{
+    for (int i = 0; i < n; i++)
+    {
+        cin >> arr[i];
+    }
+}
+
+
+void Sort::display()
+{
+    for (int i = 0; i < n; i++)
+    {
+        cout << arr[i] << " ";
+    }
+    cout << endl;
+}
+
+
+void Sort::reset(vector<int> &original)
+{
+    arr = original;
+}
+
+
+void Sort::normalBubbleSort()
+{
+    for (int i = 0; i < n - 1; i++)
+    {
+        for (int j = 0; j < n - i - 1; j++)
+        {
+            if (arr[j] > arr[j + 1])
+            {
+                swap(arr[j], arr[j + 1]);
+            }
+        }
+    }
+}
+
+
+void Sort::parallelBubbleSort()
+{
+    for (int i = 0; i < n - 1; i++)
+    {
+#pragma omp parallel for
+        for (int j = 0; j < n - i - 1; j++)
+        {
+            if (arr[j] > arr[j + 1])
+            {
+#pragma omp critical
+                swap(arr[j], arr[j + 1]);
+            }
+        }
+    }
+}
+
+
+void merge(vector<int> &arr, int left, int mid, int right)
+{
+    int n1 = mid - left + 1;
+    int n2 = right - mid;
+
+
+    vector<int> L(n1), R(n2);
+    for (int i = 0; i < n1; i++)
+        L[i] = arr[left + i];
+    for (int i = 0; i < n2; i++)
+        R[i] = arr[mid + 1 + i];
+
+
+    int i = 0, j = 0, k = left;
+    while (i < n1 && j < n2)
+    {
+        if (L[i] <= R[j])
+            arr[k++] = L[i++];
+        else
+            arr[k++] = R[j++];
+    }
+
+
+    while (i < n1)
+        arr[k++] = L[i++];
+    while (j < n2)
+        arr[k++] = R[j++];
+}
+
+
+void Sort::normalMergeSort(int left, int right)
+{
+    if (left < right)
+    {
+        int mid = left + (right - left) / 2;
+        normalMergeSort(left, mid);
+        normalMergeSort(mid + 1, right);
+        merge(arr, left, mid, right);
+    }
+}
+
+
+void Sort::parallelMergeSort(int left, int right)
+{
+    if (left < right)
+    {
+        int mid = left + (right - left) / 2;
+#pragma omp parallel sections
+        {
+#pragma omp section
+            parallelMergeSort(left, mid);
+#pragma omp section
+            parallelMergeSort(mid + 1, right);
+        }
+        merge(arr, left, mid, right);
+    }
+}
+
+
+int main()
+{
+    int choice, size;
+    cout << "Enter number of elements: ";
+    cin >> size;
+
+
+    Sort sorter(size);
+    vector<int> original(size);
+
+
+    while (true)
+    {
+        cout << "\nMenu:\n";
+        cout << "1: Accept & Display\n";
+        cout << "2: Bubble Sort Comparison\n";
+        cout << "3: Merge Sort Comparison\n";
+        cout << "Enter your choice: ";
+        cin >> choice;
+
+
+        switch (choice)
+        {
+        case 1:
+            sorter.accept();
+            original = sorter.arr;
+            sorter.display();
+            break;
+
+
+        case 2:
+            sorter.reset(original);
+            auto start_time = high_resolution_clock::now();
+            sorter.normalBubbleSort();
+            auto end_time = high_resolution_clock::now();
+            cout << "Sorted (Normal Bubble Sort): ";
+            sorter.display();
+            cout << "Time taken: " << duration_cast<microseconds>(end_time - start_time).count() << " microseconds\n";
+
+
+            sorter.reset(original);
+            start_time = high_resolution_clock::now();
+            sorter.parallelBubbleSort();
+            end_time = high_resolution_clock::now();
+            cout << "Sorted (Parallel Bubble Sort): ";
+            sorter.display();
+            cout << "Time taken: " << duration_cast<microseconds>(end_time - start_time).count() << " microseconds\n";
+            break;
+
+
+        case 3:
+            sorter.reset(original);
+            start_time = high_resolution_clock::now();
+            sorter.normalMergeSort(0, size - 1);
+            end_time = high_resolution_clock::now();
+            cout << "Sorted (Normal Merge Sort): ";
+            sorter.display();
+            cout << "Time taken: " << duration_cast<microseconds>(end_time - start_time).count() << " microseconds\n";
+
+
+            sorter.reset(original);
+            start_time = high_resolution_clock::now();
+            sorter.parallelMergeSort(0, size - 1);
+            end_time = high_resolution_clock::now();
+            cout << "Sorted (Parallel Merge Sort): ";
+            sorter.display();
+            cout << "Time taken: " << duration_cast<microseconds>(end_time - start_time).count() << " microseconds\n";
+            break;
+
+
+        default:
+            cout << "Invalid choice!\n";
+        }
+    }
+
+
+    return 0;
+}
+________________
+A3.
+
+
+#include <iostream>
+#include <vector>
+#include <chrono>
+#include <omp.h>
+
+
+using namespace std;
+using namespace std::chrono;
+
+
+int parallelMin(vector<int> &arr)
+{
+    int minVal = arr[0];
+#pragma omp parallel for reduction(min : minVal)
+    for (int i = 0; i < arr.size(); i++)
+    {
+        if (arr[i] < minVal)
+            minVal = arr[i];
+    }
+    return minVal;
+}
+
+
+int parallelMax(vector<int> &arr)
+{
+    int maxVal = arr[0];
+#pragma omp parallel for reduction(max : maxVal)
+    for (int i = 0; i < arr.size(); i++)
+    {
+        if (arr[i] > maxVal)
+            maxVal = arr[i];
+    }
+    return maxVal;
+}
+
+
+int parallelSum(vector<int> &arr)
+{
+    int sum = 0;
+#pragma omp parallel for reduction(+ : sum)
+    for (int i = 0; i < arr.size(); i++)
+    {
+        sum += arr[i];
+    }
+    return sum;
+}
+
+
+double parallelAverage(vector<int> &arr)
+{
+    int sum = parallelSum(arr);
+    return (double)sum / arr.size();
+}
+
+
+int main()
+{
+    int n;
+    cout << "Enter number of elements: ";
+    cin >> n;
+
+
+    vector<int> arr(n);
+    cout << "Enter elements: ";
+    for (int i = 0; i < n; i++)
+    {
+        cin >> arr[i];
+    }
+
+
+    auto start_time = high_resolution_clock::now();
+    int minVal = parallelMin(arr);
+    auto end_time = high_resolution_clock::now();
+    cout << "Parallel Min: " << minVal << ", Time taken: "
+         << duration_cast<microseconds>(end_time - start_time).count() << " microseconds\n";
+
+
+    start_time = high_resolution_clock::now();
+    int maxVal = parallelMax(arr);
+    end_time = high_resolution_clock::now();
+    cout << "Parallel Max: " << maxVal << ", Time taken: "
+         << duration_cast<microseconds>(end_time - start_time).count() << " microseconds\n";
+
+
+    start_time = high_resolution_clock::now();
+    int sum = parallelSum(arr);
+    end_time = high_resolution_clock::now();
+    cout << "Parallel Sum: " << sum << ", Time taken: "
+         << duration_cast<microseconds>(end_time - start_time).count() << " microseconds\n";
+
+
+    start_time = high_resolution_clock::now();
+    double avg = parallelAverage(arr);
+    end_time = high_resolution_clock::now();
+    cout << "Parallel Average: " << avg << ", Time taken: "
+         << duration_cast<microseconds>(end_time - start_time).count() << " microseconds\n";
+
+
+    return 0;
+}
+
+
+________________
+A4.1
+
+
+#include <iostream>
+#include <cuda_runtime.h>
+#define N 1000000 // Size of the vectors
+// Kernel function for vector addition
+__global__ void
+vectorAdd(int *A, int *B, int *C, int n)
+{
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+    if (idx < n)
+    {
+        C[idx] = A[idx] + B[idx];
+    }
+}
+int main()
+{
+    int *A, *B, *C;       // Host vectors
+    int *d_A, *d_B, *d_C; // Device vectors
+    size_t size = N * sizeof(int);
+    // Allocate memory on the host
+    A = (int *)malloc(size);
+    B = (int *)malloc(size);
+    C = (int *)malloc(size);
+    // Allocate memory on the device
+    cudaMalloc(&d_A, size);
+    cudaMalloc(&d_B, size);
+    cudaMalloc(&d_C, size);
+    // Initialize host vectors with random values
+    for (int i = 0; i < N; i++)
+    {
+        A[i] = rand() % 100;
+        B[i] = rand() % 100;
+    }
+    // Copy data from host to device
+    cudaMemcpy(d_A, A, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_B, B, size, cudaMemcpyHostToDevice);
+    // Define block and grid sizes
+    int blockSize = 256;                            // Number of threads per block
+    int gridSize = (N + blockSize - 1) / blockSize; // Calculate number of blocks
+    // Launch kernel for vector addition
+    vectorAdd<<<gridSize, blockSize>>>(d_A, d_B, d_C, N);
+    // Copy result back to host
+    cudaMemcpy(C, d_C, size, cudaMemcpyDeviceToHost);
+    // Display the input vectors (A and B) and the result vector (C)
+    std::cout << "First 10 elements of Vector A (Input):" << std::endl;
+    for (int i = 0; i < 10; i++)
+    {
+        std::cout << "A[" << i << "] = " << A[i] << std::endl;
+    }
+    std::cout << "\nFirst 10 elements of Vector B (Input):" << std::endl;
+    for (int i = 0; i < 10; i++)
+    {
+        std::cout << "B[" << i << "] = " << B[i] << std::endl;
+    }
+    std::cout << "\nFirst 10 elements of Vector C (Output):" << std::endl;
+    for (int i = 0; i < 10; i++)
+    {
+        std::cout << "C[" << i << "] = " << C[i] << std::endl;
+    }
+    // Free memory
+    free(A);
+    free(B);
+    free(C);
+    cudaFree(d_A);
+    cudaFree(d_B);
+    cudaFree(d_C);
+    return 0;
+}
+________________
+A4.2
+
+
+#include <iostream>
+#include <cuda_runtime.h>
+#define N 1024 // Size of the matrix (NxN)
+__global__ void
+matrixMul(int *A, int *B, int *C, int n)
+{
+    int row = blockIdx.y * blockDim.y + threadIdx.y;
+    int col = blockIdx.x * blockDim.x + threadIdx.x;
+    if (row < n && col < n)
+    {
+        int sum = 0;
+        for (int k = 0; k < n; k++)
+        {
+            sum += A[row * n + k] * B[k * n + col];
+        }
+        C[row * n + col] = sum;
+    }
+}
+int main()
+{
+    int *A, *B, *C;       // Host matrices
+    int *d_A, *d_B, *d_C; // Device matrices
+    size_t size = N * N * sizeof(int);
+    // Allocate memory on the host
+    A = (int *)malloc(size);
+    B = (int *)malloc(size);
+    C = (int *)malloc(size);
+    // Allocate memory on the device
+    cudaMalloc(&d_A, size);
+    cudaMalloc(&d_B, size);
+    cudaMalloc(&d_C, size);
+    // Initialize matrices with random values
+    for (int i = 0; i < N; i++)
+    {
+        for (int j = 0; j < N; j++)
+        {
+            A[i * N + j] = rand() % 10;
+            B[i * N + j] = rand() % 10;
+        }
+    }
+    // Copy matrices from host to device
+    cudaMemcpy(d_A, A, size, cudaMemcpyHostToDevice);
+    cudaMemcpy(d_B, B, size, cudaMemcpyHostToDevice);
+    // Define block and grid sizes
+    dim3 threadsPerBlock(16, 16);
+    dim3 numBlocks((N + threadsPerBlock.x - 1) / threadsPerBlock.x,
+                   (N + threadsPerBlock.y - 1) / threadsPerBlock.y);
+    // Launch kernel for matrix multiplication
+    matrixMul<<<numBlocks, threadsPerBlock>>>(d_A, d_B, d_C, N);
+    // Copy result back to host
+    cudaMemcpy(C, d_C, size, cudaMemcpyDeviceToHost);
+    // Display input matrices A and B
+    std::cout << "First 5x5 elements of Matrix A (Input):" << std::endl;
+    for (int i = 0; i < 5; i++)
+    {
+        for (int j = 0; j < 5; j++)
+        {
+            std::cout << A[i * N + j] << " ";
+        }
+        std::cout << std::endl;
+    }
+    std::cout << "\nFirst 5x5 elements of Matrix B (Input):" << std::endl;
+    for (int i = 0; i < 5; i++)
+    {
+        for (int j = 0; j < 5; j++)
+        {
+            std::cout << B[i * N + j] << " ";
+        }
+        std::cout << std::endl;
+    }
+    // Display the resulting matrix C (First 5x5)
+    std::cout << "\nFirst 5x5 elements of Matrix C (Output):" << std::endl;
+    for (int i = 0; i < 5; i++)
+    {
+        for (int j = 0; j < 5; j++)
+        {
+            std::cout << C[i * N + j] << " ";
+        }
+        std::cout << std::endl;
+    }
+    // Free memory
+    free(A);
+    free(B);
+    free(C);
+    cudaFree(d_A);
+    cudaFree(d_B);
+    cudaFree(d_C);
+    return 0;
+}
+________________
+Steps
+
+
+1. Run ssh 172.60.8.97
+2. Enter password
+3. `touch file_name.cu`
+4. `vim file_name.cu`
+5. i) Press ‘i’ to get into the inserting mode.
+ii) After completion of the code press ‘ESC’ to exit inserting mode
+6. To save and exit the file press :wq
+7. ‘nvcc file_name.cu -o obj_name’
+8. ‘ ./obj_name‘
